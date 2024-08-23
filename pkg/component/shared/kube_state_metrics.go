@@ -6,6 +6,7 @@ package shared
 
 import (
 	"github.com/Masterminds/semver/v3"
+	"github.com/gardener/gardener/pkg/utils/secrets/manager"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/gardener/gardener/imagevector"
@@ -21,6 +22,7 @@ func NewKubeStateMetrics(
 	runtimeVersion *semver.Version,
 	priorityClassName string,
 	nameSuffix string,
+	secretsManager manager.Interface,
 ) (
 	component.DeployWaiter,
 	error,
@@ -30,7 +32,7 @@ func NewKubeStateMetrics(
 		return nil, err
 	}
 
-	return kubestatemetrics.New(c, gardenNamespaceName, nil, kubestatemetrics.Values{
+	return kubestatemetrics.New(c, gardenNamespaceName, secretsManager, kubestatemetrics.Values{
 		ClusterType:       component.ClusterTypeSeed,
 		KubernetesVersion: runtimeVersion,
 		Image:             image.String(),

@@ -127,7 +127,8 @@ type components struct {
 	terminalControllerManager component.DeployWaiter
 
 	gardenerMetricsExporter       component.DeployWaiter
-	kubeStateMetrics              component.DeployWaiter
+	kubeStateMetricsRuntime       component.DeployWaiter
+	kubeStateMetricsVirtual       component.DeployWaiter
 	fluentOperator                component.DeployWaiter
 	fluentBit                     component.DeployWaiter
 	fluentOperatorCustomResources component.DeployWaiter
@@ -277,7 +278,11 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
-	c.kubeStateMetrics, err = r.newKubeStateMetrics()
+	c.kubeStateMetricsRuntime, err = r.newKubeStateMetricsRuntime()
+	if err != nil {
+		return
+	}
+	c.kubeStateMetricsVirtual, err = r.newKubeStateMetricsVirtual(secretsManager)
 	if err != nil {
 		return
 	}
@@ -757,13 +762,25 @@ func (r *Reconciler) newKubeControllerManager(
 	)
 }
 
-func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
+func (r *Reconciler) newKubeStateMetricsRuntime() (component.DeployWaiter, error) {
 	return sharedcomponent.NewKubeStateMetrics(
 		r.RuntimeClientSet.Client(),
 		r.GardenNamespace,
 		r.RuntimeVersion,
 		v1beta1constants.PriorityClassNameGardenSystem100,
 		kubestatemetrics.SuffixRuntime,
+		nil,
+	)
+}
+
+func (r *Reconciler) newKubeStateMetricsVirtual(secretsManager secretsmanager.Interface) (component.DeployWaiter, error) {
+	return sharedcomponent.NewKubeStateMetrics(
+		r.RuntimeClientSet.Client(),
+		r.GardenNamespace,
+		r.RuntimeVersion,
+		v1beta1constants.PriorityClassNameGardenSystem100,
+		kubestatemetrics.SuffixVirtual,
+		secretsManager,
 	)
 }
 
