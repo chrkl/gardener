@@ -80,8 +80,12 @@ func (r *Reconciler) delete(
 			Fn:   component.OpDestroyAndWait(c.gardenerMetricsExporter).Destroy,
 		})
 		_ = g.Add(flow.Task{
-			Name: "Destroying Kube State Metrics",
-			Fn:   component.OpDestroyAndWait(c.kubeStateMetrics).Destroy,
+			Name: "Destroying Kube State Metrics Runtime",
+			Fn:   component.OpDestroyAndWait(c.kubeStateMetricsRuntime).Destroy,
+		})
+		_ = g.Add(flow.Task{
+			Name: "Destroying Kube State Metrics Virtual",
+			Fn:   component.OpDestroyAndWait(c.kubeStateMetricsVirtual).Destroy,
 		})
 		destroyAlertmanager = g.Add(flow.Task{
 			Name: "Destroying Alertmanager",

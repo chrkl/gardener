@@ -39,6 +39,8 @@ const (
 	SuffixSeed = "-seed"
 	// SuffixRuntime is the suffix for garden-runtime kube-state-metrics resources.
 	SuffixRuntime = "-runtime"
+	// SuffixVirtual is the suffix for the kube-state-metrics resources to monitor the virtual cluster.
+	SuffixVirtual = "-virtual"
 )
 
 // New creates a new instance of DeployWaiter for the kube-state-metrics.
