@@ -286,10 +286,10 @@ func (k *kubeStateMetrics) deployment(
 		},
 	}
 
-	if k.values.ClusterType == component.ClusterTypeSeed {
+	if k.values.ClusterType == component.ClusterTypeSeed && k.values.NameSuffix != SuffixVirtual {
 		deployment.Spec.Template.Spec.ServiceAccountName = serviceAccount.Name
 	}
-	if k.values.ClusterType == component.ClusterTypeShoot {
+	if k.values.ClusterType == component.ClusterTypeShoot || k.values.NameSuffix == SuffixVirtual {
 		deployment.Spec.Template.Spec.AutomountServiceAccountToken = ptr.To(false)
 		utilruntime.Must(gardenerutils.InjectGenericKubeconfig(deployment, genericTokenKubeconfigSecretName, shootAccessSecret.Secret.Name))
 	}
@@ -568,6 +568,43 @@ func (k *kubeStateMetrics) scrapeConfigGarden() *monitoringv1alpha1.ScrapeConfig
 	scrapeConfig.Spec = monitoringv1alpha1.ScrapeConfigSpec{
 		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
 			Role:       monitoringv1alpha1.KubernetesRoleService,
+			Namespaces: &monitoringv1alpha1.NamespaceDiscovery{Names: []string{k.namespace}},
+		}},
+		RelabelConfigs: []monitoringv1.RelabelConfig{
+			{
+				SourceLabels: []monitoringv1.LabelName{
+					"__meta_kubernetes_service_label_component",
+					"__meta_kubernetes_service_port_name",
+				},
+				Regex:  "kube-state-metrics" + k.values.NameSuffix + ";" + portNameMetrics,
+				Action: "keep",
+			},
+			{
+				Action:      "replace",
+				Replacement: ptr.To("kube-state-metrics"),
+				TargetLabel: "job",
+			},
+			{
+				TargetLabel: "instance",
+				Replacement: ptr.To("kube-state-metrics"),
+			},
+		},
+		MetricRelabelConfigs: []monitoringv1.RelabelConfig{{
+			SourceLabels: []monitoringv1.LabelName{"pod"},
+			Regex:        `^.+\.tf-pod.+$`,
+			Action:       "drop",
+		}},
+	}
+
+	return scrapeConfig
+}
+
+func (k *kubeStateMetrics) scrapeConfigVirtual() *monitoringv1alpha1.ScrapeConfig {
+	scrapeConfig := &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics"+k.values.NameSuffix, k.namespace, garden.Label)}
+	scrapeConfig.Labels = monitoringutils.Labels(garden.Label)
+	scrapeConfig.Spec = monitoringv1alpha1.ScrapeConfigSpec{
+		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
+			Role:       "service",
 			Namespaces: &monitoringv1alpha1.NamespaceDiscovery{Names: []string{k.namespace}},
 		}},
 		RelabelConfigs: []monitoringv1.RelabelConfig{
