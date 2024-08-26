@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+// SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company and Gardener contributors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -97,22 +97,36 @@ func (k *kubeStateMetrics) getResourcesForSeed() ([]client.Object, error) {
 			k.service(),
 			k.verticalPodAutoscaler(deployment),
 			customResourceStateConfigMap,
+			k.scrapeConfigSeed(),
+			k.scrapeConfigCache(),
 		}
 	)
 
-	switch k.values.NameSuffix {
-	case SuffixSeed:
-		resources = append(
-			resources,
-			k.scrapeConfigSeed(),
-			k.scrapeConfigCache(),
-		)
-	case SuffixRuntime:
-		resources = append(
-			resources,
-			k.scrapeConfigGarden(),
-		)
+	return resources, nil
+}
+
+func (k *kubeStateMetrics) getResourcesForRuntime() ([]client.Object, error) {
+	customResourceStateConfigMap, err := k.customResourceStateConfigMap()
+	if err != nil {
+		return nil, err
 	}
+
+	var (
+		clusterRole    = k.clusterRole()
+		serviceAccount = k.serviceAccount()
+		deployment     = k.deployment(serviceAccount, "", nil, customResourceStateConfigMap.Name)
+		resources      = []client.Object{
+			clusterRole,
+			serviceAccount,
+			k.clusterRoleBinding(clusterRole, serviceAccount),
+			deployment,
+			k.podDisruptionBudget(deployment),
+			k.service(),
+			k.verticalPodAutoscaler(deployment),
+			customResourceStateConfigMap,
+			k.scrapeConfigGarden(),
+		}
+	)
 
 	return resources, nil
 }
