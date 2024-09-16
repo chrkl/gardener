@@ -645,7 +645,7 @@ var _ = Describe("KubeStateMetrics", func() {
 		}
 		scrapeConfigGarden = &monitoringv1alpha1.ScrapeConfig{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "garden-kube-state-metrics",
+				Name:      "garden-kube-state-metrics-runtime",
 				Namespace: namespace,
 				Labels:    map[string]string{"prometheus": "garden"},
 			},
@@ -661,6 +661,43 @@ var _ = Describe("KubeStateMetrics", func() {
 							"__meta_kubernetes_service_port_name",
 						},
 						Regex:  "kube-state-metrics-runtime;metrics",
+						Action: "keep",
+					},
+					{
+						Action:      "replace",
+						Replacement: ptr.To("kube-state-metrics"),
+						TargetLabel: "job",
+					},
+					{
+						TargetLabel: "instance",
+						Replacement: ptr.To("kube-state-metrics"),
+					},
+				},
+				MetricRelabelConfigs: []monitoringv1.RelabelConfig{{
+					SourceLabels: []monitoringv1.LabelName{"pod"},
+					Regex:        `^.+\.tf-pod.+$`,
+					Action:       "drop",
+				}},
+			},
+		}
+		scrapeConfigVirtual = &monitoringv1alpha1.ScrapeConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "garden-kube-state-metrics-virtual",
+				Namespace: namespace,
+				Labels:    map[string]string{"prometheus": "garden"},
+			},
+			Spec: monitoringv1alpha1.ScrapeConfigSpec{
+				KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
+					Role:       "service",
+					Namespaces: &monitoringv1alpha1.NamespaceDiscovery{Names: []string{namespace}},
+				}},
+				RelabelConfigs: []monitoringv1.RelabelConfig{
+					{
+						SourceLabels: []monitoringv1.LabelName{
+							"__meta_kubernetes_service_label_component",
+							"__meta_kubernetes_service_port_name",
+						},
+						Regex:  "kube-state-metrics-runtime;virtual",
 						Action: "keep",
 					},
 					{
@@ -1115,6 +1152,93 @@ var _ = Describe("KubeStateMetrics", func() {
 
 				It("should successfully deploy all resources", func() {
 					expectedObjects = append(expectedObjects, pdbFor(false, "-seed"))
+					Expect(managedResource).To(consistOf(expectedObjects...))
+				})
+			})
+		})
+
+		Context("cluster type virtual", func() {
+			var expectedObjects []client.Object
+
+			BeforeEach(func() {
+				values = Values{
+					NameSuffix: "-virtual",
+				}
+				ksm = New(c, namespace, sm, Values{
+					ClusterType:       component.ClusterTypeSeed,
+					KubernetesVersion: semver.MustParse("1.26.3"),
+					Image:             image,
+					PriorityClassName: priorityClassName,
+					NameSuffix:        "-virtual",
+				})
+				managedResourceName = "kube-state-metrics-virtual"
+			})
+
+			JustBeforeEach(func() {
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
+
+				Expect(ksm.Deploy(ctx)).To(Succeed())
+
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(Succeed())
+				expectedMr := &resourcesv1alpha1.ManagedResource{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      managedResourceName,
+						Namespace: namespace,
+						Labels: map[string]string{
+							"gardener.cloud/role":                "seed-system-component",
+							"origin":                             "gardener",
+							"care.gardener.cloud/condition-type": "ObservabilityComponentsHealthy",
+						},
+						ResourceVersion: "1",
+					},
+					Spec: resourcesv1alpha1.ManagedResourceSpec{
+						Class: ptr.To("seed"),
+						SecretRefs: []corev1.LocalObjectReference{{
+							Name: managedResource.Spec.SecretRefs[0].Name,
+						}},
+						KeepObjects: ptr.To(false),
+					},
+				}
+				utilruntime.Must(references.InjectAnnotations(expectedMr))
+				Expect(managedResource).To(DeepEqual(expectedMr))
+				expectedObjects = []client.Object{
+					serviceAccountFor("-virtual"),
+					clusterRoleFor(component.ClusterTypeSeed, "-virtual"),
+					clusterRoleBindingFor(component.ClusterTypeSeed, "-virtual"),
+					serviceFor(component.ClusterTypeSeed),
+					deploymentFor(component.ClusterTypeSeed),
+					vpaFor("-virtual"),
+					scrapeConfigVirtual,
+					customResourceStateConfigMap,
+				}
+
+				managedResourceSecret.Name = managedResource.Spec.SecretRefs[0].Name
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
+				Expect(managedResourceSecret.Type).To(Equal(corev1.SecretTypeOpaque))
+				Expect(managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
+				Expect(managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
+			})
+
+			Context("Kubernetes versions >= 1.26", func() {
+				It("should successfully deploy all resources", func() {
+					expectedObjects = append(expectedObjects, pdbFor(true, "-virtual"))
+					Expect(managedResource).To(consistOf(expectedObjects...))
+				})
+			})
+
+			Context("Kubernetes versions < 1.26", func() {
+				BeforeEach(func() {
+					ksm = New(c, namespace, sm, Values{
+						ClusterType:       component.ClusterTypeSeed,
+						KubernetesVersion: semver.MustParse("1.25.3"),
+						Image:             image,
+						PriorityClassName: priorityClassName,
+						NameSuffix:        "-virtual",
+					})
+				})
+
+				It("should successfully deploy all resources", func() {
+					expectedObjects = append(expectedObjects, pdbFor(false, "-virtual"))
 					Expect(managedResource).To(consistOf(expectedObjects...))
 				})
 			})
