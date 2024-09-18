@@ -175,7 +175,7 @@ func (k *kubeStateMetrics) deployment(
 
 	customResourceStateConfigFile := customResourceStateConfigMountDir + "/" + customResourceStateConfigMountFile
 
-	if k.values.ClusterType == component.ClusterTypeSeed {
+	if k.values.ClusterType == component.ClusterTypeSeed && k.values.NameSuffix != SuffixVirtual {
 		deploymentLabels[v1beta1constants.LabelRole] = v1beta1constants.LabelMonitoring
 		podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
 			v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer: v1beta1constants.LabelNetworkPolicyAllowed,
@@ -209,6 +209,18 @@ func (k *kubeStateMetrics) deployment(
 			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
 			"--metric-allowlist="+strings.Join(shootMetricAllowlist, ","),
 			"--custom-resource-state-config-file="+customResourceStateConfigFile,
+		)
+	}
+
+	if k.values.ClusterType == component.ClusterTypeSeed && k.values.NameSuffix == SuffixVirtual {
+		deploymentLabels[v1beta1constants.GardenRole] = v1beta1constants.LabelMonitoring
+		podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
+			gardenerutils.NetworkPolicyLabel("virtual-garden-"+v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
+		})
+		args = append(args,
+			"--kubeconfig="+gardenerutils.PathGenericKubeconfig,
+			"--custom-resource-state-config-file="+customResourceStateConfigFile,
+			"--custom-resource-state-only=true",
 		)
 	}
 
