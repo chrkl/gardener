@@ -184,7 +184,7 @@ func (k *kubeStateMetrics) getResourcesForVirtual(genericTokenKubeconfigSecretNa
 }
 
 func (k *kubeStateMetrics) getResourcesForVirtualTarget(shootAccessSecret *gardenerutils.AccessSecret) []client.Object {
-	clusterRole := k.clusterRole()
+	clusterRole := k.clusterRole(WithGardenerVirtualClusterRules())
 	return []client.Object{
 		clusterRole,
 		k.clusterRoleBinding(clusterRole, &corev1.ServiceAccount{
