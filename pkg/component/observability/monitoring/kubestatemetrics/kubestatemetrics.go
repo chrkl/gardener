@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	operatorclient "github.com/gardener/gardener/pkg/operator/client"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -161,42 +162,133 @@ func (k *kubeStateMetrics) getResourcesForShootTarget(shootAccessSecret *gardene
 	}
 }
 
-func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
-	var (
-		shootAccessSecret *gardenerutils.AccessSecret
-		registry          = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
-	)
-
-	if k.values.ClusterType == component.ClusterTypeShoot {
-		genericTokenKubeconfigSecret, found := k.secretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
-		if !found {
-			return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameGenericTokenKubeconfig)
-		}
-
-		shootAccessSecret = k.newShootAccessSecret()
-		if err := shootAccessSecret.Reconcile(ctx, k.client); err != nil {
-			return err
-		}
-
-		resources, err := k.getResourcesForShoot(genericTokenKubeconfigSecret.Name, shootAccessSecret)
-		if err != nil {
-			return err
-		}
-
-		if err := registry.Add(resources...); err != nil {
-			return err
-		}
+func (k *kubeStateMetrics) getResourcesForVirtual(genericTokenKubeconfigSecretName string, shootAccessSecret *gardenerutils.AccessSecret) ([]client.Object, error) {
+	customResourceStateConfigMap, err := k.customResourceStateConfigMap()
+	if err != nil {
+		return nil, err
 	}
 
-	if k.values.ClusterType == component.ClusterTypeSeed {
-		resources, err := k.getResourcesForSeed()
-		if err != nil {
-			return err
-		}
+	deployment := k.deployment(nil, genericTokenKubeconfigSecretName, shootAccessSecret, customResourceStateConfigMap.Name)
+	return []client.Object{
+		deployment,
+		k.scrapeConfigShoot(),
+		k.podDisruptionBudget(deployment),
+		k.service(),
+		k.verticalPodAutoscaler(deployment),
+		customResourceStateConfigMap,
+		k.scrapeConfigVirtual(),
+	}, nil
+}
 
-		if err := registry.Add(resources...); err != nil {
-			return err
-		}
+func (k *kubeStateMetrics) getResourcesForVirtualTarget(shootAccessSecret *gardenerutils.AccessSecret) []client.Object {
+	clusterRole := k.clusterRole()
+	return []client.Object{
+		clusterRole,
+		k.clusterRoleBinding(clusterRole, &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      shootAccessSecret.ServiceAccountName,
+				Namespace: metav1.NamespaceSystem,
+			},
+		}),
+	}
+}
+
+func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
+	if k.values.ClusterType == component.ClusterTypeShoot {
+		return k.deployShoot(ctx)
+	}
+
+	if k.values.ClusterType == component.ClusterTypeSeed && k.values.NameSuffix == SuffixSeed {
+		return k.deploySeed(ctx)
+	}
+
+	if k.values.ClusterType == component.ClusterTypeSeed && k.values.NameSuffix == SuffixRuntime {
+		return k.deployRuntime(ctx)
+	}
+
+	if k.values.ClusterType == component.ClusterTypeSeed && k.values.NameSuffix == SuffixVirtual {
+		return k.deployVirtual(ctx)
+	}
+
+	return fmt.Errorf("invalid combination of cluster type %v and name suffix %v", k.values.ClusterType, k.values.NameSuffix)
+}
+
+func (k *kubeStateMetrics) deployRuntime(ctx context.Context) error {
+	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+
+	resources, err := k.getResourcesForRuntime()
+	if err != nil {
+		return err
+	}
+
+	if err := registry.Add(resources...); err != nil {
+		return err
+	}
+
+	serializedResources, err := registry.SerializedObjects()
+	if err != nil {
+		return err
+	}
+
+	return managedresources.CreateForSeedWithLabels(
+		ctx,
+		k.client,
+		k.namespace,
+		k.managedResourceName(),
+		false,
+		map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy},
+		serializedResources,
+	)
+}
+
+func (k *kubeStateMetrics) deploySeed(ctx context.Context) error {
+	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+
+	resources, err := k.getResourcesForSeed()
+	if err != nil {
+		return err
+	}
+
+	if err := registry.Add(resources...); err != nil {
+		return err
+	}
+
+	serializedResources, err := registry.SerializedObjects()
+	if err != nil {
+		return err
+	}
+
+	return managedresources.CreateForSeedWithLabels(
+		ctx,
+		k.client,
+		k.namespace,
+		k.managedResourceName(),
+		false,
+		map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy},
+		serializedResources,
+	)
+}
+
+func (k *kubeStateMetrics) deployShoot(ctx context.Context) error {
+	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+	shootAccessSecret := k.newShootAccessSecret()
+
+	genericTokenKubeconfigSecret, found := k.secretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
+	if !found {
+		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameGenericTokenKubeconfig)
+	}
+
+	if err := shootAccessSecret.Reconcile(ctx, k.client); err != nil {
+		return err
+	}
+
+	resources, err := k.getResourcesForShoot(genericTokenKubeconfigSecret.Name, shootAccessSecret)
+	if err != nil {
+		return err
+	}
+
+	if err := registry.Add(resources...); err != nil {
+		return err
 	}
 
 	serializedResources, err := registry.SerializedObjects()
@@ -216,26 +308,79 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	if k.values.ClusterType == component.ClusterTypeShoot {
-		registryTarget := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
-		resourcesTarget, err := registryTarget.AddAllAndSerialize(k.getResourcesForShootTarget(shootAccessSecret)...)
-		if err != nil {
-			return err
-		}
-
-		return managedresources.CreateForShootWithLabels(
-			ctx,
-			k.client,
-			k.namespace,
-			k.managedResourceName()+"-target",
-			managedresources.LabelValueGardener,
-			false,
-			map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy},
-			resourcesTarget,
-		)
+	registryTarget := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
+	resourcesTarget, err := registryTarget.AddAllAndSerialize(k.getResourcesForShootTarget(shootAccessSecret)...)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return managedresources.CreateForShootWithLabels(
+		ctx,
+		k.client,
+		k.namespace,
+		k.managedResourceName()+"-target",
+		managedresources.LabelValueGardener,
+		false,
+		map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy},
+		resourcesTarget,
+	)
+}
+
+func (k *kubeStateMetrics) deployVirtual(ctx context.Context) error {
+	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+	virtualAccessSecret := k.newShootAccessSecret()
+
+	genericTokenKubeconfigSecret, found := k.secretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
+	if !found {
+		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameGenericTokenKubeconfig)
+	}
+
+	if err := virtualAccessSecret.Reconcile(ctx, k.client); err != nil {
+		return err
+	}
+
+	resources, err := k.getResourcesForVirtual(genericTokenKubeconfigSecret.Name, virtualAccessSecret)
+	if err != nil {
+		return err
+	}
+
+	if err := registry.Add(resources...); err != nil {
+		return err
+	}
+
+	serializedResources, err := registry.SerializedObjects()
+	if err != nil {
+		return err
+	}
+
+	if err := managedresources.CreateForSeedWithLabels(
+		ctx,
+		k.client,
+		k.namespace,
+		k.managedResourceName(),
+		false,
+		map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy},
+		serializedResources,
+	); err != nil {
+		return err
+	}
+
+	registryTarget := managedresources.NewRegistry(operatorclient.VirtualScheme, operatorclient.VirtualCodec, operatorclient.VirtualSerializer)
+	resourcesTarget, err := registryTarget.AddAllAndSerialize(k.getResourcesForVirtualTarget(virtualAccessSecret)...)
+	if err != nil {
+		return err
+	}
+
+	return managedresources.CreateForShootWithLabels(
+		ctx,
+		k.client,
+		k.namespace,
+		k.managedResourceName()+"-target",
+		managedresources.LabelValueGardener,
+		false,
+		map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy},
+		resourcesTarget,
+	)
 }
 
 func (k *kubeStateMetrics) Destroy(ctx context.Context) error {

@@ -1129,7 +1129,6 @@ var _ = Describe("KubeStateMetrics", func() {
 				}
 				ksm = New(c, namespace, sm, Values{
 					ClusterType:       component.ClusterTypeSeed,
-					KubernetesVersion: semver.MustParse("1.26.3"),
 					Image:             image,
 					PriorityClassName: priorityClassName,
 					NameSuffix:        "-virtual",
@@ -1184,7 +1183,7 @@ var _ = Describe("KubeStateMetrics", func() {
 
 			Context("Kubernetes versions >= 1.26", func() {
 				It("should successfully deploy all resources", func() {
-					expectedObjects = append(expectedObjects, pdbFor(true, "-virtual"))
+					expectedObjects = append(expectedObjects, pdbFor("-virtual"))
 					Expect(managedResource).To(consistOf(expectedObjects...))
 				})
 			})
@@ -1193,7 +1192,6 @@ var _ = Describe("KubeStateMetrics", func() {
 				BeforeEach(func() {
 					ksm = New(c, namespace, sm, Values{
 						ClusterType:       component.ClusterTypeSeed,
-						KubernetesVersion: semver.MustParse("1.25.3"),
 						Image:             image,
 						PriorityClassName: priorityClassName,
 						NameSuffix:        "-virtual",
@@ -1201,7 +1199,7 @@ var _ = Describe("KubeStateMetrics", func() {
 				})
 
 				It("should successfully deploy all resources", func() {
-					expectedObjects = append(expectedObjects, pdbFor(false, "-virtual"))
+					expectedObjects = append(expectedObjects, pdbFor("-virtual"))
 					Expect(managedResource).To(consistOf(expectedObjects...))
 				})
 			})
