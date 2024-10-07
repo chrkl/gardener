@@ -121,15 +121,17 @@ var _ = Describe("KubeStateMetrics", func() {
 						Resources: []string{"verticalpodautoscalers"},
 						Verbs:     []string{"list", "watch"},
 					},
-					{
-						APIGroups: []string{"operator.gardener.cloud"},
-						Resources: []string{"gardens"},
-						Verbs:     []string{"list", "watch"},
-					},
 				},
 			}
 
 			if clusterType == component.ClusterTypeSeed {
+				if values.NameSuffix == SuffixRuntime {
+					obj.Rules = append(obj.Rules, rbacv1.PolicyRule{
+						APIGroups: []string{"operator.gardener.cloud"},
+						Resources: []string{"gardens"},
+						Verbs:     []string{"list", "watch"},
+					})
+				}
 				obj.Rules = append(obj.Rules, rbacv1.PolicyRule{
 					APIGroups: []string{"autoscaling"},
 					Resources: []string{"horizontalpodautoscalers"},
