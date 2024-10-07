@@ -85,7 +85,7 @@ func (k *kubeStateMetrics) getResourcesForSeed() ([]client.Object, error) {
 	}
 
 	var (
-		clusterRole    = k.clusterRole()
+		clusterRole    = k.clusterRole(WithDefaultRules(), WithHorizontalPodAutoscalerRules())
 		serviceAccount = k.serviceAccount()
 		deployment     = k.deployment(serviceAccount, "", nil, customResourceStateConfigMap.Name)
 		resources      = []client.Object{
@@ -112,7 +112,7 @@ func (k *kubeStateMetrics) getResourcesForRuntime() ([]client.Object, error) {
 	}
 
 	var (
-		clusterRole    = k.clusterRole()
+		clusterRole    = k.clusterRole(WithDefaultRules(), WithGardenerOperatorRules(), WithHorizontalPodAutoscalerRules())
 		serviceAccount = k.serviceAccount()
 		deployment     = k.deployment(serviceAccount, "", nil, customResourceStateConfigMap.Name)
 		resources      = []client.Object{
@@ -149,7 +149,7 @@ func (k *kubeStateMetrics) getResourcesForShoot(genericTokenKubeconfigSecretName
 }
 
 func (k *kubeStateMetrics) getResourcesForShootTarget(shootAccessSecret *gardenerutils.AccessSecret) []client.Object {
-	clusterRole := k.clusterRole()
+	clusterRole := k.clusterRole(WithDefaultRules())
 	return []client.Object{
 		clusterRole,
 		k.clusterRoleBinding(clusterRole, &corev1.ServiceAccount{
