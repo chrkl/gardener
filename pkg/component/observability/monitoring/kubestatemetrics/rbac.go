@@ -76,6 +76,19 @@ func WithGardenerOperatorRules() ClusterRoleOption {
 	}
 }
 
+func WithGardenerVirtualClusterRules() ClusterRoleOption {
+	return func(role *rbacv1.ClusterRole) {
+		rules := []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"core.gardener.cloud"},
+				Resources: []string{"shoots", "seeds", "projects"},
+				Verbs:     []string{"list", "watch"},
+			},
+		}
+		role.Rules = append(role.Rules, rules...)
+	}
+}
+
 func WithHorizontalPodAutoscalerRules() ClusterRoleOption {
 	return func(role *rbacv1.ClusterRole) {
 		rules := []rbacv1.PolicyRule{
