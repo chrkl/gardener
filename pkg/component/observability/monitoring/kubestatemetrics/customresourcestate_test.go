@@ -25,10 +25,10 @@ func expectedCustomResourceStateConfig(suffix string) string {
 		rawActual                    []byte
 		expectFilePath, relativePath string
 		err                          error
-		options                      []Option
+		options                      []MetricsOption
 	)
 
-	options = []Option{WithVPAMetrics}
+	options = []MetricsOption{WithVPAMetrics}
 	relativePath = "testdata/custom-resource-state-vpa.expectation.yaml"
 
 	if suffix == SuffixRuntime {

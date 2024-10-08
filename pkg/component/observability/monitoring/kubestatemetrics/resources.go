@@ -684,7 +684,7 @@ func (k *kubeStateMetrics) nameSuffix() string {
 }
 
 func (k *kubeStateMetrics) customResourceStateConfigMap() (*corev1.ConfigMap, error) {
-	opts := []Option{WithVPAMetrics}
+	opts := []MetricsOption{WithVPAMetrics}
 	if k.values.NameSuffix == SuffixRuntime {
 		opts = append(opts, WithGardenResourceMetrics)
 	}
