@@ -182,8 +182,8 @@ func newGardenCustomResourceStateMetrics() customresourcestate.Resource {
 	return resource
 }
 
-// Option is a functional option type used to configure the CustomResourceState settings
-type Option func(*customresourcestate.Metrics)
+// MetricsOption is a functional option type used to configure the CustomResourceState settings
+type MetricsOption func(*customresourcestate.Metrics)
 
 // WithGardenResourceMetrics adds the custom resource state configuration for the Garden resource
 func WithGardenResourceMetrics(c *customresourcestate.Metrics) {
@@ -197,7 +197,7 @@ func WithVPAMetrics(c *customresourcestate.Metrics) {
 
 // NewCustomResourceStateConfig returns a new CustomResourceState configuration that can be serialized
 // and passed to the kube-state-metrics binary to create metrics from custom resource definitions
-func NewCustomResourceStateConfig(options ...Option) customresourcestate.Metrics {
+func NewCustomResourceStateConfig(options ...MetricsOption) customresourcestate.Metrics {
 	metrics := customresourcestate.Metrics{
 		Spec: customresourcestate.MetricsSpec{
 			Resources: []customresourcestate.Resource{},
