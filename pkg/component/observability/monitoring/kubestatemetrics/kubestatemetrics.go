@@ -166,7 +166,7 @@ func (k *kubeStateMetrics) getResourcesForShootTarget(shootAccessSecret *gardene
 }
 
 func (k *kubeStateMetrics) getResourcesForVirtual(genericTokenKubeconfigSecretName string, shootAccessSecret *gardenerutils.AccessSecret) ([]client.Object, error) {
-	customResourceStateConfigMap, err := k.customResourceStateConfigMap()
+	customResourceStateConfigMap, err := k.customResourceStateConfigMapForVirtual()
 	if err != nil {
 		return nil, err
 	}
