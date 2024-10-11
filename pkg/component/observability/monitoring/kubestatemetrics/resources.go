@@ -690,3 +690,21 @@ func (k *kubeStateMetrics) customResourceStateConfigMap() (*corev1.ConfigMap, er
 	utilruntime.Must(kubernetesutils.MakeUnique(configMap))
 	return configMap, nil
 }
+
+func (k *kubeStateMetrics) customResourceStateConfigMapForVirtual() (*corev1.ConfigMap, error) {
+	opts := []MetricsOption{WithProjectMetrics, WithShootMetrics}
+	customResourceStateConfig, err := yaml.Marshal(NewCustomResourceStateConfig(opts...))
+
+	if err != nil {
+		return nil, err
+	}
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: customResourceStateConfigMapNamePrefix, Namespace: k.namespace},
+		Data: map[string]string{
+			customResourceStateConfigMountFile: string(customResourceStateConfig),
+		},
+	}
+	utilruntime.Must(kubernetesutils.MakeUnique(configMap))
+	return configMap, nil
+}
