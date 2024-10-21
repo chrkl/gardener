@@ -420,9 +420,15 @@ func (r *Reconciler) runReconcileSeedFlow(
 		})
 
 		_ = g.Add(flow.Task{
-			Name:         "Deploying kube-state-metrics",
-			Fn:           c.kubeStateMetrics.Deploy,
+			Name:         "Deploying kube-state-metrics-seed",
+			Fn:           c.kubeStateMetricsSeed.Deploy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Deploying kube-state-metrics-virtual",
+			Fn:           c.kubeStateMetricsVirtual.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			SkipIf:       !seedIsGarden,
 		})
 		deployFluentOperator = g.Add(flow.Task{
 			Name:         "Deploying Fluent Operator",

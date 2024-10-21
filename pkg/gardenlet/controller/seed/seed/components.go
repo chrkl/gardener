@@ -107,7 +107,8 @@ type components struct {
 	fluentOperatorCustomResources component.DeployWaiter
 	plutono                       plutono.Interface
 	vali                          component.Deployer
-	kubeStateMetrics              component.DeployWaiter
+	kubeStateMetricsSeed          component.DeployWaiter
+	kubeStateMetricsVirtual       component.DeployWaiter
 	prometheusOperator            component.DeployWaiter
 	cachePrometheus               component.DeployWaiter
 	seedPrometheus                component.DeployWaiter
@@ -211,7 +212,11 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
-	c.kubeStateMetrics, err = r.newKubeStateMetrics()
+	c.kubeStateMetricsSeed, err = r.newKubeStateMetricsSeed()
+	if err != nil {
+		return
+	}
+	c.kubeStateMetricsVirtual, err = r.newKubeStateMetricsVirtual()
 	if err != nil {
 		return
 	}
@@ -728,13 +733,24 @@ func (r *Reconciler) newEtcdDruid() (component.DeployWaiter, error) {
 	)
 }
 
-func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
+func (r *Reconciler) newKubeStateMetricsSeed() (component.DeployWaiter, error) {
 	return sharedcomponent.NewKubeStateMetrics(
 		r.SeedClientSet.Client(),
 		r.GardenNamespace,
 		r.SeedVersion,
 		v1beta1constants.PriorityClassNameSeedSystem600,
 		kubestatemetrics.SuffixSeed,
+		nil,
+	)
+}
+
+func (r *Reconciler) newKubeStateMetricsVirtual() (component.DeployWaiter, error) {
+	return sharedcomponent.NewKubeStateMetrics(
+		r.SeedClientSet.Client(),
+		r.GardenNamespace,
+		r.SeedVersion,
+		v1beta1constants.PriorityClassNameSeedSystem600,
+		kubestatemetrics.SuffixVirtual,
 		nil,
 	)
 }

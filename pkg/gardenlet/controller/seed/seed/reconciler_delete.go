@@ -208,8 +208,13 @@ func (r *Reconciler) runDeleteSeedFlow(
 			SkipIf: seedIsGarden,
 		})
 		destroyKubeStateMetrics = g.Add(flow.Task{
-			Name: "Destroy kube-state-metrics",
-			Fn:   component.OpDestroyAndWait(c.kubeStateMetrics).Destroy,
+			Name: "Destroy kube-state-metrics-seed",
+			Fn:   component.OpDestroyAndWait(c.kubeStateMetricsSeed).Destroy,
+		})
+		destroyKubeStateMetricsVirtual = g.Add(flow.Task{
+			Name:   "Destroy kube-state-metrics-virtual",
+			Fn:     component.OpDestroyAndWait(c.kubeStateMetricsVirtual).Destroy,
+			SkipIf: !seedIsGarden,
 		})
 		destroyPrometheusOperator = g.Add(flow.Task{
 			Name:   "Destroy Prometheus Operator",
@@ -260,6 +265,7 @@ func (r *Reconciler) runDeleteSeedFlow(
 			destroyPrometheusOperator,
 			destroyPlutono,
 			destroyKubeStateMetrics,
+			destroyKubeStateMetricsVirtual,
 			destroyEtcdDruid,
 			destroyHVPA,
 			destroyVPA,
