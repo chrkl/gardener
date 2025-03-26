@@ -28,12 +28,23 @@ func expectedCustomResourceStateConfig(suffix string) string {
 		options                      []MetricsOption
 	)
 
-	options = []MetricsOption{WithVPAMetrics}
+	options = []MetricsOption{}
 	relativePath = "testdata/custom-resource-state-vpa.expectation.yaml"
 
+	if suffix == SuffixSeed {
+		options = append(options, WithVPAMetrics)
+	}
+
 	if suffix == SuffixRuntime {
+		options = append(options, WithVPAMetrics)
 		options = append(options, WithGardenResourceMetrics)
 		relativePath = "testdata/custom-resource-state-garden.expectation.yaml"
+	}
+
+	if suffix == SuffixVirtual {
+		options = append(options, WithProjectMetrics)
+		options = append(options, WithShootMetrics)
+		relativePath = "testdata/custom-resource-state-virtual.expectation.yaml"
 	}
 
 	expectFilePath, err = filepath.Abs(relativePath)

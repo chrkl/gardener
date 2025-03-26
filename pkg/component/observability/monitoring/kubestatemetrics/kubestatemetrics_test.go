@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+// SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company and Gardener contributors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -246,15 +246,24 @@ var _ = Describe("KubeStateMetrics", func() {
 					"type":      string(clusterType),
 					"role":      "monitoring",
 				}
+
 				podLabels = map[string]string{
 					"component":                        name,
-					"type":                             string(clusterType),
 					"role":                             "monitoring",
+					"type":                             string(clusterType),
 					"networking.gardener.cloud/to-dns": "allowed",
 					"networking.gardener.cloud/to-runtime-apiserver": "allowed",
 				}
+
 				switch values.NameSuffix {
 				case SuffixSeed:
+					podLabels = map[string]string{
+						"component":                        name,
+						"type":                             string(clusterType),
+						"role":                             "monitoring",
+						"networking.gardener.cloud/to-dns": "allowed",
+						"networking.gardener.cloud/to-runtime-apiserver": "allowed",
+					}
 					args = []string{
 						"--port=8080",
 						"--telemetry-port=8081",
@@ -323,6 +332,47 @@ var _ = Describe("KubeStateMetrics", func() {
 						"--custom-resource-state-config-file=/config/custom-resource-state.yaml",
 					}
 				case SuffixRuntime:
+					podLabels = map[string]string{
+						"component":                        name,
+						"type":                             string(clusterType),
+						"role":                             "monitoring",
+						"networking.gardener.cloud/to-dns": "allowed",
+						"networking.gardener.cloud/to-runtime-apiserver": "allowed",
+					}
+					args = []string{
+						"--port=8080",
+						"--telemetry-port=8081",
+						"--resources=deployments,pods,statefulsets,nodes,horizontalpodautoscalers,persistentvolumeclaims,replicasets,namespaces",
+						"--metric-labels-allowlist=nodes=[*],pods=[origin]",
+						"--metric-annotations-allowlist=namespaces=[shoot.gardener.cloud/uid]",
+						"--metric-allowlist=" +
+							"^kube_pod_container_status_restarts_total$," +
+							"^kube_pod_info$," +
+							"^kube_pod_status_phase$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_target_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_target_memory$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_uncappedtarget_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_uncappedtarget_memory$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_upperbound_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_upperbound_memory$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_lowerbound_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_lowerbound_memory$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_minallowed_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_minallowed_memory$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_maxallowed_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_maxallowed_memory$," +
+							"^kube_customresource_verticalpodautoscaler_spec_updatepolicy_updatemode$," +
+							"^garden_garden_condition$," +
+							"^garden_garden_last_operation$",
+						"--custom-resource-state-config-file=/config/custom-resource-state.yaml",
+					}
+				case SuffixVirtual:
+					podLabels = map[string]string{
+						"component":                        name,
+						"type":                             string(clusterType),
+						"gardener.cloud/role":              "monitoring",
+						"networking.gardener.cloud/to-dns": "allowed",
+						"networking.resources.gardener.cloud/to-virtual-garden-kube-apiserver-tcp-443": "allowed"}
 					args = []string{
 						"--port=8080",
 						"--telemetry-port=8081",
@@ -713,7 +763,7 @@ var _ = Describe("KubeStateMetrics", func() {
 							"__meta_kubernetes_service_label_component",
 							"__meta_kubernetes_service_port_name",
 						},
-						Regex:  "kube-state-metrics-runtime;virtual",
+						Regex:  "kube-state-metrics-virtual;metrics",
 						Action: "keep",
 					},
 					{
@@ -1134,9 +1184,20 @@ var _ = Describe("KubeStateMetrics", func() {
 					NameSuffix:        "-virtual",
 				})
 				managedResourceName = "kube-state-metrics-virtual"
+
+				customResourceStateConfigMap = &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "kube-state-metrics-custom-resource-state",
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						"custom-resource-state.yaml": expectedCustomResourceStateConfig(values.NameSuffix),
+					},
+				}
+				Expect(kubernetesutils.MakeUnique(customResourceStateConfigMap)).To(Succeed())
 			})
 
-			JustBeforeEach(func() {
+			It("should successfully deploy all resources", func() {
 				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
 
 				Expect(ksm.Deploy(ctx)).To(Succeed())
@@ -1148,7 +1209,6 @@ var _ = Describe("KubeStateMetrics", func() {
 						Namespace: namespace,
 						Labels: map[string]string{
 							"gardener.cloud/role":                "seed-system-component",
-							"origin":                             "gardener",
 							"care.gardener.cloud/condition-type": "ObservabilityComponentsHealthy",
 						},
 						ResourceVersion: "1",
@@ -1164,14 +1224,13 @@ var _ = Describe("KubeStateMetrics", func() {
 				utilruntime.Must(references.InjectAnnotations(expectedMr))
 				Expect(managedResource).To(DeepEqual(expectedMr))
 				expectedObjects = []client.Object{
-					serviceAccountFor("-virtual"),
-					clusterRoleFor(component.ClusterTypeSeed, "-virtual"),
-					clusterRoleBindingFor(component.ClusterTypeSeed, "-virtual"),
-					serviceFor(component.ClusterTypeSeed),
 					deploymentFor(component.ClusterTypeSeed),
+					scrapeConfigShoot,
+					pdbFor("-virtual"),
+					serviceFor(component.ClusterTypeSeed),
 					vpaFor("-virtual"),
-					scrapeConfigVirtual,
 					customResourceStateConfigMap,
+					scrapeConfigVirtual,
 				}
 
 				managedResourceSecret.Name = managedResource.Spec.SecretRefs[0].Name
@@ -1179,29 +1238,7 @@ var _ = Describe("KubeStateMetrics", func() {
 				Expect(managedResourceSecret.Type).To(Equal(corev1.SecretTypeOpaque))
 				Expect(managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
 				Expect(managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
-			})
-
-			Context("Kubernetes versions >= 1.26", func() {
-				It("should successfully deploy all resources", func() {
-					expectedObjects = append(expectedObjects, pdbFor("-virtual"))
-					Expect(managedResource).To(consistOf(expectedObjects...))
-				})
-			})
-
-			Context("Kubernetes versions < 1.26", func() {
-				BeforeEach(func() {
-					ksm = New(c, namespace, sm, Values{
-						ClusterType:       component.ClusterTypeSeed,
-						Image:             image,
-						PriorityClassName: priorityClassName,
-						NameSuffix:        "-virtual",
-					})
-				})
-
-				It("should successfully deploy all resources", func() {
-					expectedObjects = append(expectedObjects, pdbFor("-virtual"))
-					Expect(managedResource).To(consistOf(expectedObjects...))
-				})
+				Expect(managedResource).To(consistOf(expectedObjects...))
 			})
 		})
 

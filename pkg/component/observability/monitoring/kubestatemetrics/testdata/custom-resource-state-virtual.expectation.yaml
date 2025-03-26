@@ -1,0 +1,91 @@
+spec:
+  resources:
+  - metricNamePrefix: garden
+    groupVersionKind:
+      group: core.gardener.cloud
+      version: v1beta1
+      kind: Project
+    commonLabels: {}
+    labelsFromPath:
+      name:
+      - metadata
+      - name
+    metrics:
+    - name: project_info
+      help: information about a Gardener Project
+      each:
+        type: info
+        gauge: null
+        stateSet: null
+        info:
+          labelsFromPath:
+            namespace:
+            - spec
+            - namespace
+          path: []
+          labelFromKey: ""
+      commonLabels: {}
+      labelsFromPath: {}
+      errorLogV: 0
+    errorLogV: 0
+    resourcePlural: ""
+  - metricNamePrefix: garden
+    groupVersionKind:
+      group: core.gardener.cloud
+      version: v1beta1
+      kind: Shoot
+    commonLabels: {}
+    labelsFromPath:
+      name:
+      - metadata
+      - name
+    metrics:
+    - name: shoot_condition
+      help: represents a condition of a Gardener Shoot
+      each:
+        type: stateset
+        gauge: null
+        stateSet:
+          labelsFromPath:
+            condition:
+            - type
+          path:
+          - status
+          - conditions
+          list:
+          - Progressing
+          - "True"
+          - "False"
+          - Unknown
+          labelName: status
+          valueFrom:
+          - status
+        info: null
+      commonLabels: {}
+      labelsFromPath: {}
+      errorLogV: 0
+    - name: shoot_last_operation
+      help: denotes the last operation performed on a Shoot object
+      each:
+        type: stateset
+        gauge: null
+        stateSet:
+          labelsFromPath: {}
+          path:
+          - status
+          - lastOperation
+          list:
+          - Create
+          - Reconcile
+          - Delete
+          - Migrate
+          - Restore
+          labelName: last_operation
+          valueFrom:
+          - type
+        info: null
+      commonLabels: {}
+      labelsFromPath: {}
+      errorLogV: 0
+    errorLogV: 0
+    resourcePlural: ""
