@@ -95,6 +95,16 @@ func (k *kubeStateMetrics) clusterRole() *rbacv1.ClusterRole {
 		},
 	}
 
+	if k.values.NameSuffix == SuffixVirtual {
+		clusterRole.Rules = []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"core.gardener.cloud"},
+				Resources: []string{"shoots", "seeds", "projects"},
+				Verbs:     []string{"list", "watch"},
+			},
+		}
+	}
+
 	if k.values.ClusterType == component.ClusterTypeSeed {
 		clusterRole.Rules = append(clusterRole.Rules, rbacv1.PolicyRule{
 			APIGroups: []string{"autoscaling"},
@@ -137,7 +147,11 @@ func (k *kubeStateMetrics) service() *corev1.Service {
 		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForGardenScrapeTargets(service, metricsPort))
 		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForSeedScrapeTargets(service, metricsPort))
 	case component.ClusterTypeShoot:
-		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(service, metricsPort))
+		if k.values.NameSuffix == SuffixVirtual {
+			utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForGardenScrapeTargets(service, metricsPort))
+		} else {
+			utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(service, metricsPort))
+		}
 	}
 
 	service.Spec.Type = corev1.ServiceTypeClusterIP
@@ -199,7 +213,7 @@ func (k *kubeStateMetrics) deployment(
 		)
 	}
 
-	if k.values.ClusterType == component.ClusterTypeShoot {
+	if k.values.ClusterType == component.ClusterTypeShoot && k.values.NameSuffix != SuffixVirtual {
 		deploymentLabels[v1beta1constants.GardenRole] = v1beta1constants.LabelMonitoring
 		podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
 			gardenerutils.NetworkPolicyLabel(v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
@@ -211,6 +225,18 @@ func (k *kubeStateMetrics) deployment(
 			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
 			"--metric-allowlist="+strings.Join(shootMetricAllowlist, ","),
 			"--custom-resource-state-config-file="+customResourceStateConfigFile,
+		)
+	}
+
+	if k.values.NameSuffix == SuffixVirtual {
+		deploymentLabels[v1beta1constants.GardenRole] = v1beta1constants.LabelMonitoring
+		podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
+			gardenerutils.NetworkPolicyLabel("virtual-garden-"+v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
+		})
+		args = append(args,
+			"--kubeconfig="+gardenerutils.PathGenericKubeconfig,
+			"--custom-resource-state-config-file="+customResourceStateConfigFile,
+			"--custom-resource-state-only=true",
 		)
 	}
 
@@ -616,6 +642,9 @@ func (k *kubeStateMetrics) scrapeConfigGarden() *monitoringv1alpha1.ScrapeConfig
 func (k *kubeStateMetrics) scrapeConfigShoot() *monitoringv1alpha1.ScrapeConfig {
 	scrapeConfig := &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics"+k.values.NameSuffix, k.namespace, shoot.Label)}
 	scrapeConfig.Labels = monitoringutils.Labels(shoot.Label)
+	if k.values.NameSuffix == SuffixVirtual {
+		scrapeConfig.Labels = monitoringutils.Labels(garden.Label)
+	}
 	scrapeConfig.Spec = k.standardScrapeConfigSpec()
 	return scrapeConfig
 }
@@ -717,9 +746,18 @@ func (k *kubeStateMetrics) nameSuffix() string {
 }
 
 func (k *kubeStateMetrics) customResourceStateConfigMap() (*corev1.ConfigMap, error) {
-	opts := []Option{WithVPAMetrics}
+	var opts []Option
+
+	if k.values.NameSuffix != SuffixVirtual {
+		opts = append(opts, WithVPAMetrics)
+	}
+
 	if k.values.NameSuffix == SuffixRuntime {
 		opts = append(opts, WithGardenResourceMetrics)
+	}
+
+	if k.values.NameSuffix == SuffixVirtual {
+		opts = append(opts, WithVirtualGardenMetrics)
 	}
 
 	customResourceStateConfig, err := yaml.Marshal(NewCustomResourceStateConfig(opts...))

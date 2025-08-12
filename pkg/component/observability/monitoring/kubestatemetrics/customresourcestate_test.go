@@ -36,6 +36,11 @@ func expectedCustomResourceStateConfig(suffix string) string {
 		relativePath = "testdata/custom-resource-state-garden.expectation.yaml"
 	}
 
+	if suffix == SuffixVirtual {
+		options = []Option{WithVirtualGardenMetrics}
+		relativePath = "testdata/custom-resource-state-virtual.expectation.yaml"
+	}
+
 	expectFilePath, err = filepath.Abs(relativePath)
 	Expect(err).ToNot(HaveOccurred())
 	rawActual, err = yaml.Marshal(NewCustomResourceStateConfig(options...))

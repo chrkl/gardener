@@ -136,12 +136,24 @@ var _ = Describe("KubeStateMetrics", func() {
 				})
 			}
 
+			if nameSuffix == "-virtual" {
+				obj.Rules = []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"core.gardener.cloud"},
+						Resources: []string{"shoots", "seeds", "projects"},
+						Verbs:     []string{"list", "watch"},
+					},
+				}
+			}
+
 			return obj
 		}
 		clusterRoleBindingFor = func(clusterType component.ClusterType, nameSuffix string) *rbacv1.ClusterRoleBinding {
 			name := "gardener.cloud:monitoring:kube-state-metrics"
+			serviceAccountName := "kube-state-metrics"
 			if clusterType == component.ClusterTypeSeed {
 				name += values.NameSuffix
+				serviceAccountName += values.NameSuffix
 			}
 
 			obj := &rbacv1.ClusterRoleBinding{
@@ -162,7 +174,7 @@ var _ = Describe("KubeStateMetrics", func() {
 				},
 				Subjects: []rbacv1.Subject{{
 					Kind: rbacv1.ServiceAccountKind,
-					Name: "kube-state-metrics" + nameSuffix,
+					Name: serviceAccountName,
 				}},
 			}
 
@@ -174,11 +186,8 @@ var _ = Describe("KubeStateMetrics", func() {
 
 			return obj
 		}
-		serviceFor = func(clusterType component.ClusterType) *corev1.Service {
-			name := "kube-state-metrics"
-			if clusterType == component.ClusterTypeSeed {
-				name += values.NameSuffix
-			}
+		serviceFor = func(clusterType component.ClusterType, nameSuffix string) *corev1.Service {
+			name := "kube-state-metrics" + values.NameSuffix
 
 			obj := &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
@@ -213,14 +222,16 @@ var _ = Describe("KubeStateMetrics", func() {
 			if clusterType == component.ClusterTypeShoot {
 				obj.Annotations = map[string]string{"networking.resources.gardener.cloud/from-all-scrape-targets-allowed-ports": `[{"protocol":"TCP","port":8080}]`}
 			}
+			if nameSuffix == SuffixVirtual {
+				obj.Annotations = map[string]string{
+					"networking.resources.gardener.cloud/from-all-garden-scrape-targets-allowed-ports": `[{"protocol":"TCP","port":8080}]`,
+				}
+			}
 
 			return obj
 		}
 		deploymentFor = func(clusterType component.ClusterType) *appsv1.Deployment {
-			name := "kube-state-metrics"
-			if clusterType == component.ClusterTypeSeed {
-				name += values.NameSuffix
-			}
+			name := "kube-state-metrics" + values.NameSuffix
 
 			var (
 				maxUnavailable = intstr.FromInt32(1)
@@ -371,80 +382,98 @@ var _ = Describe("KubeStateMetrics", func() {
 
 			if clusterType == component.ClusterTypeShoot {
 				deploymentLabels = map[string]string{
-					"component":           "kube-state-metrics",
+					"component":           "kube-state-metrics" + values.NameSuffix,
 					"type":                string(clusterType),
 					"gardener.cloud/role": "monitoring",
 				}
-				podLabels = map[string]string{
-					"component":                        "kube-state-metrics",
-					"type":                             string(clusterType),
-					"gardener.cloud/role":              "monitoring",
-					"networking.gardener.cloud/to-dns": "allowed",
-					"networking.resources.gardener.cloud/to-kube-apiserver-tcp-443": "allowed",
-				}
-				args = []string{
-					"--port=8080",
-					"--telemetry-port=8081",
-					"--resources=daemonsets,deployments,nodes,pods,statefulsets,replicasets",
-					"--namespaces=kube-system",
-					"--kubeconfig=/var/run/secrets/gardener.cloud/shoot/generic-kubeconfig/kubeconfig",
-					"--metric-labels-allowlist=nodes=[*],pods=[origin]",
-					"--metric-allowlist=" +
-						"^kube_daemonset_metadata_generation$," +
-						"^kube_daemonset_status_current_number_scheduled$," +
-						"^kube_daemonset_status_desired_number_scheduled$," +
-						"^kube_daemonset_status_number_available$," +
-						"^kube_daemonset_status_number_unavailable$," +
-						"^kube_daemonset_status_updated_number_scheduled$," +
-						"^kube_deployment_metadata_generation$," +
-						"^kube_deployment_spec_replicas$," +
-						"^kube_deployment_status_observed_generation$," +
-						"^kube_deployment_status_replicas$," +
-						"^kube_deployment_status_replicas_available$," +
-						"^kube_deployment_status_replicas_unavailable$," +
-						"^kube_deployment_status_replicas_updated$," +
-						"^kube_node_info$," +
-						"^kube_node_labels$," +
-						"^kube_node_spec_taint$," +
-						"^kube_node_spec_unschedulable$," +
-						"^kube_node_status_allocatable$," +
-						"^kube_node_status_capacity$," +
-						"^kube_node_status_condition$," +
-						"^kube_pod_container_info$," +
-						"^kube_pod_container_resource_limits$," +
-						"^kube_pod_container_resource_requests$," +
-						"^kube_pod_container_status_restarts_total$," +
-						"^kube_pod_info$," +
-						"^kube_pod_labels$," +
-						"^kube_pod_status_phase$," +
-						"^kube_pod_status_ready$," +
-						"^kube_replicaset_owner$," +
-						"^kube_replicaset_metadata_generation$," +
-						"^kube_replicaset_spec_replicas$," +
-						"^kube_replicaset_status_observed_generation$," +
-						"^kube_replicaset_status_replicas$," +
-						"^kube_replicaset_status_ready_replicas$," +
-						"^kube_statefulset_metadata_generation$," +
-						"^kube_statefulset_replicas$," +
-						"^kube_statefulset_status_observed_generation$," +
-						"^kube_statefulset_status_replicas$," +
-						"^kube_statefulset_status_replicas_current$," +
-						"^kube_statefulset_status_replicas_ready$," +
-						"^kube_statefulset_status_replicas_updated$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_target_cpu$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_target_memory$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_uncappedtarget_cpu$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_uncappedtarget_memory$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_upperbound_cpu$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_upperbound_memory$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_lowerbound_cpu$," +
-						"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_lowerbound_memory$," +
-						"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_minallowed_cpu$," +
-						"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_minallowed_memory$," +
-						"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_maxallowed_cpu$," +
-						"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_maxallowed_memory$," +
-						"^kube_customresource_verticalpodautoscaler_spec_updatepolicy_updatemode$",
-					"--custom-resource-state-config-file=/config/custom-resource-state.yaml",
+				switch values.NameSuffix {
+				case SuffixVirtual:
+					podLabels = map[string]string{
+						"component":                        "kube-state-metrics" + values.NameSuffix,
+						"type":                             string(clusterType),
+						"gardener.cloud/role":              "monitoring",
+						"networking.gardener.cloud/to-dns": "allowed",
+						"networking.resources.gardener.cloud/to-virtual-garden-kube-apiserver-tcp-443": "allowed",
+					}
+					args = []string{
+						"--port=8080",
+						"--telemetry-port=8081",
+						"--kubeconfig=/var/run/secrets/gardener.cloud/shoot/generic-kubeconfig/kubeconfig",
+						"--custom-resource-state-config-file=/config/custom-resource-state.yaml",
+						"--custom-resource-state-only=true",
+					}
+				default:
+					podLabels = map[string]string{
+						"component":                        "kube-state-metrics" + values.NameSuffix,
+						"type":                             string(clusterType),
+						"gardener.cloud/role":              "monitoring",
+						"networking.gardener.cloud/to-dns": "allowed",
+						"networking.resources.gardener.cloud/to-kube-apiserver-tcp-443": "allowed",
+					}
+					args = []string{
+						"--port=8080",
+						"--telemetry-port=8081",
+						"--resources=daemonsets,deployments,nodes,pods,statefulsets,replicasets",
+						"--namespaces=kube-system",
+						"--kubeconfig=/var/run/secrets/gardener.cloud/shoot/generic-kubeconfig/kubeconfig",
+						"--metric-labels-allowlist=nodes=[*],pods=[origin]",
+						"--metric-allowlist=" +
+							"^kube_daemonset_metadata_generation$," +
+							"^kube_daemonset_status_current_number_scheduled$," +
+							"^kube_daemonset_status_desired_number_scheduled$," +
+							"^kube_daemonset_status_number_available$," +
+							"^kube_daemonset_status_number_unavailable$," +
+							"^kube_daemonset_status_updated_number_scheduled$," +
+							"^kube_deployment_metadata_generation$," +
+							"^kube_deployment_spec_replicas$," +
+							"^kube_deployment_status_observed_generation$," +
+							"^kube_deployment_status_replicas$," +
+							"^kube_deployment_status_replicas_available$," +
+							"^kube_deployment_status_replicas_unavailable$," +
+							"^kube_deployment_status_replicas_updated$," +
+							"^kube_node_info$," +
+							"^kube_node_labels$," +
+							"^kube_node_spec_taint$," +
+							"^kube_node_spec_unschedulable$," +
+							"^kube_node_status_allocatable$," +
+							"^kube_node_status_capacity$," +
+							"^kube_node_status_condition$," +
+							"^kube_pod_container_info$," +
+							"^kube_pod_container_resource_limits$," +
+							"^kube_pod_container_resource_requests$," +
+							"^kube_pod_container_status_restarts_total$," +
+							"^kube_pod_info$," +
+							"^kube_pod_labels$," +
+							"^kube_pod_status_phase$," +
+							"^kube_pod_status_ready$," +
+							"^kube_replicaset_owner$," +
+							"^kube_replicaset_metadata_generation$," +
+							"^kube_replicaset_spec_replicas$," +
+							"^kube_replicaset_status_observed_generation$," +
+							"^kube_replicaset_status_replicas$," +
+							"^kube_replicaset_status_ready_replicas$," +
+							"^kube_statefulset_metadata_generation$," +
+							"^kube_statefulset_replicas$," +
+							"^kube_statefulset_status_observed_generation$," +
+							"^kube_statefulset_status_replicas$," +
+							"^kube_statefulset_status_replicas_current$," +
+							"^kube_statefulset_status_replicas_ready$," +
+							"^kube_statefulset_status_replicas_updated$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_target_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_target_memory$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_uncappedtarget_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_uncappedtarget_memory$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_upperbound_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_upperbound_memory$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_lowerbound_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_status_recommendation_containerrecommendations_lowerbound_memory$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_minallowed_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_minallowed_memory$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_maxallowed_cpu$," +
+							"^kube_customresource_verticalpodautoscaler_spec_resourcepolicy_containerpolicies_maxallowed_memory$," +
+							"^kube_customresource_verticalpodautoscaler_spec_updatepolicy_updatemode$",
+						"--custom-resource-state-config-file=/config/custom-resource-state.yaml",
+					}
 				}
 				automountServiceAccountToken = ptr.To(false)
 				volumeMounts = append(volumeMounts, corev1.VolumeMount{
@@ -739,6 +768,51 @@ var _ = Describe("KubeStateMetrics", func() {
 				},
 			},
 		}
+		scrapeConfigVirtual = &monitoringv1alpha1.ScrapeConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "shoot-kube-state-metrics-virtual",
+				Namespace: namespace,
+				Labels:    map[string]string{"prometheus": "garden"},
+			},
+			Spec: monitoringv1alpha1.ScrapeConfigSpec{
+				KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
+					Role:       "Service",
+					Namespaces: &monitoringv1alpha1.NamespaceDiscovery{Names: []string{namespace}},
+				}},
+				RelabelConfigs: []monitoringv1.RelabelConfig{
+					{
+						SourceLabels: []monitoringv1.LabelName{
+							"__meta_kubernetes_service_label_component",
+							"__meta_kubernetes_service_port_name",
+						},
+						Regex:  "kube-state-metrics-virtual;metrics",
+						Action: "keep",
+					},
+					{
+						SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_service_label_type"},
+						Regex:        `(.+)`,
+						Replacement:  ptr.To(`${1}`),
+						TargetLabel:  "type",
+					},
+					{
+						Action:      "replace",
+						Replacement: ptr.To("kube-state-metrics"),
+						TargetLabel: "job",
+					},
+					{
+						TargetLabel: "instance",
+						Replacement: ptr.To("kube-state-metrics"),
+					},
+				},
+				MetricRelabelConfigs: []monitoringv1.RelabelConfig{
+					{
+						SourceLabels: []monitoringv1.LabelName{"pod"},
+						Regex:        `^.+\.tf-pod.+$`,
+						Action:       "drop",
+					},
+				},
+			},
+		}
 		prometheusRuleShoot = func() *monitoringv1.PrometheusRule {
 			rules := []monitoringv1.Rule{
 				{
@@ -805,7 +879,7 @@ var _ = Describe("KubeStateMetrics", func() {
 
 			return &monitoringv1.PrometheusRule{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shoot-kube-state-metrics",
+					Name:      "shoot-kube-state-metrics" + values.NameSuffix,
 					Namespace: namespace,
 					Labels:    map[string]string{"prometheus": "shoot"},
 				},
@@ -988,7 +1062,7 @@ var _ = Describe("KubeStateMetrics", func() {
 					serviceAccountFor("-runtime"),
 					clusterRoleFor(component.ClusterTypeSeed, "-runtime"),
 					clusterRoleBindingFor(component.ClusterTypeSeed, "-runtime"),
-					serviceFor(component.ClusterTypeSeed),
+					serviceFor(component.ClusterTypeSeed, "-runtime"),
 					deploymentFor(component.ClusterTypeSeed),
 					pdbFor("-runtime"),
 					vpaFor("-runtime"),
@@ -1062,7 +1136,7 @@ var _ = Describe("KubeStateMetrics", func() {
 					serviceAccountFor("-seed"),
 					clusterRoleFor(component.ClusterTypeSeed, "-seed"),
 					clusterRoleBindingFor(component.ClusterTypeSeed, "-seed"),
-					serviceFor(component.ClusterTypeSeed),
+					serviceFor(component.ClusterTypeSeed, "-seed"),
 					deploymentFor(component.ClusterTypeSeed),
 					pdbFor("-seed"),
 					vpaFor("-seed"),
@@ -1167,7 +1241,7 @@ var _ = Describe("KubeStateMetrics", func() {
 					deploymentFor(component.ClusterTypeShoot),
 					prometheusRule,
 					scrapeConfigShoot,
-					serviceFor(component.ClusterTypeShoot),
+					serviceFor(component.ClusterTypeShoot, ""),
 					vpaFor(""),
 					customResourceStateConfigMap,
 				))
@@ -1187,6 +1261,115 @@ var _ = Describe("KubeStateMetrics", func() {
 				componenttest.PrometheusRule(prometheusRule, "testdata/shoot-kube-state-metrics.prometheusrule.test.yaml")
 			})
 		})
+
+		Context("cluster type virtual", func() {
+			BeforeEach(func() {
+				values = Values{
+					ClusterType:       component.ClusterTypeShoot,
+					Image:             image,
+					PriorityClassName: priorityClassName,
+					NameSuffix:        "-virtual",
+				}
+				managedResourceName = "shoot-core-kube-state-metrics-virtual"
+				managedResourceTargetName = "shoot-core-kube-state-metrics-virtual-target"
+
+				customResourceStateConfigMap = &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "kube-state-metrics-custom-resource-state",
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						"custom-resource-state.yaml": expectedCustomResourceStateConfig(values.NameSuffix),
+					},
+				}
+				Expect(kubernetesutils.MakeUnique(customResourceStateConfigMap)).To(Succeed())
+			})
+
+			JustBeforeEach(func() {
+				ksm = New(c, namespace, sm, values)
+			})
+
+			It("should successfully deploy all resources", func() {
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceTarget), managedResourceTarget)).To(BeNotFoundError())
+
+				Expect(ksm.Deploy(ctx)).To(Succeed())
+
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(Succeed())
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceTarget), managedResourceTarget)).To(Succeed())
+
+				expectedMrTarget := &resourcesv1alpha1.ManagedResource{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            managedResourceTargetName,
+						Namespace:       namespace,
+						ResourceVersion: "1",
+						Labels: map[string]string{
+							"origin":                             "gardener",
+							"care.gardener.cloud/condition-type": "ObservabilityComponentsHealthy",
+						},
+					},
+					Spec: resourcesv1alpha1.ManagedResourceSpec{
+						InjectLabels: map[string]string{"shoot.gardener.cloud/no-cleanup": "true"},
+						SecretRefs: []corev1.LocalObjectReference{{
+							Name: managedResourceTarget.Spec.SecretRefs[0].Name,
+						}},
+						KeepObjects: ptr.To(false),
+					},
+				}
+				utilruntime.Must(references.InjectAnnotations(expectedMrTarget))
+				Expect(managedResourceTarget).To(DeepEqual(expectedMrTarget))
+				Expect(managedResourceTarget).To(consistOf(
+					clusterRoleFor(component.ClusterTypeShoot, "-virtual"),
+					clusterRoleBindingFor(component.ClusterTypeShoot, "-virtual"),
+				))
+
+				expectedMr := &resourcesv1alpha1.ManagedResource{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      managedResourceName,
+						Namespace: namespace,
+						Labels: map[string]string{
+							"gardener.cloud/role":                "seed-system-component",
+							"care.gardener.cloud/condition-type": "ObservabilityComponentsHealthy",
+						},
+						ResourceVersion: "1",
+					},
+					Spec: resourcesv1alpha1.ManagedResourceSpec{
+						Class: ptr.To("seed"),
+						SecretRefs: []corev1.LocalObjectReference{{
+							Name: managedResource.Spec.SecretRefs[0].Name,
+						}},
+						KeepObjects: ptr.To(false),
+					},
+				}
+
+				utilruntime.Must(references.InjectAnnotations(expectedMr))
+				Expect(managedResource).To(DeepEqual(expectedMr))
+				prometheusRule := prometheusRuleShoot()
+				Expect(managedResource).To(consistOf(
+					deploymentFor(component.ClusterTypeShoot),
+					prometheusRule,
+					scrapeConfigVirtual,
+					serviceFor(component.ClusterTypeShoot, "-virtual"),
+					vpaFor("-virtual"),
+					customResourceStateConfigMap,
+				))
+
+				managedResourceSecret.Name = managedResource.Spec.SecretRefs[0].Name
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
+				Expect(managedResourceSecret.Type).To(Equal(corev1.SecretTypeOpaque))
+				Expect(managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
+				Expect(managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
+
+				actualSecretShootAccess := &corev1.Secret{}
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(secretShootAccess), actualSecretShootAccess)).To(Succeed())
+				expectedSecretShootAccess := secretShootAccess.DeepCopy()
+				expectedSecretShootAccess.ResourceVersion = "1"
+				Expect(actualSecretShootAccess).To(Equal(expectedSecretShootAccess))
+
+				componenttest.PrometheusRule(prometheusRule, "testdata/shoot-kube-state-metrics-virtual.prometheusrule.test.yaml")
+			})
+		})
+
 	})
 
 	Describe("#Destroy", func() {
@@ -1212,6 +1395,28 @@ var _ = Describe("KubeStateMetrics", func() {
 				ksm = New(c, namespace, sm, Values{ClusterType: component.ClusterTypeShoot})
 				managedResourceName = "shoot-core-kube-state-metrics"
 				managedResourceTargetName = "shoot-core-kube-state-metrics-target"
+			})
+
+			It("should successfully destroy all resources", func() {
+				Expect(c.Create(ctx, managedResource)).To(Succeed())
+				Expect(c.Create(ctx, managedResourceTarget)).To(Succeed())
+				Expect(c.Create(ctx, managedResourceSecret)).To(Succeed())
+				Expect(c.Create(ctx, secretShootAccess)).To(Succeed())
+
+				Expect(ksm.Destroy(ctx)).To(Succeed())
+
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceTarget), managedResource)).To(BeNotFoundError())
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(BeNotFoundError())
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(secretShootAccess), secretShootAccess)).To(BeNotFoundError())
+			})
+		})
+
+		Context("cluster type virtual", func() {
+			BeforeEach(func() {
+				ksm = New(c, namespace, sm, Values{ClusterType: component.ClusterTypeShoot, NameSuffix: "-virtual"})
+				managedResourceName = "shoot-core-kube-state-metrics-virtual"
+				managedResourceTargetName = "shoot-core-kube-state-metrics-virtual-target"
 			})
 
 			It("should successfully destroy all resources", func() {

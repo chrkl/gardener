@@ -10,12 +10,14 @@ import (
 
 	"k8s.io/kube-state-metrics/v2/pkg/customresourcestate"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	"k8s.io/utils/ptr"
 )
 
 const (
 	customResourceStateConfigMountDir      = "/config"
 	customResourceStateConfigMountFile     = "custom-resource-state.yaml"
 	customResourceStateConfigMapNamePrefix = "kube-state-metrics-custom-resource-state"
+	gardenMetricNamePrefix                 = "garden"
 )
 
 func newCustomResourceStateMetricNameForVPA(path, valuePath []string) string {
@@ -128,15 +130,13 @@ func newCustomResourceStateMetricsForVPA() customresourcestate.Resource {
 }
 
 func newGardenCustomResourceStateMetrics() customresourcestate.Resource {
-	gardenMetricNamePrefix := "garden"
-
 	resource := customresourcestate.Resource{
 		GroupVersionKind: customresourcestate.GroupVersionKind{
 			Group:   "operator.gardener.cloud",
 			Kind:    "Garden",
 			Version: "v1alpha1",
 		},
-		MetricNamePrefix: &gardenMetricNamePrefix,
+		MetricNamePrefix: ptr.To(gardenMetricNamePrefix),
 		Labels: customresourcestate.Labels{
 			LabelsFromPath: map[string][]string{
 				"name": {"metadata", "name"},
@@ -182,6 +182,40 @@ func newGardenCustomResourceStateMetrics() customresourcestate.Resource {
 	return resource
 }
 
+func newVirtualGardenCustomResourceStateMetrics() customresourcestate.Resource {
+	resources := customresourcestate.Resource{
+		GroupVersionKind: customresourcestate.GroupVersionKind{
+			Group:   "core.gardener.cloud",
+			Kind:    "Project",
+			Version: "v1beta1",
+		},
+		MetricNamePrefix: ptr.To(gardenMetricNamePrefix),
+		Labels: customresourcestate.Labels{
+			LabelsFromPath: map[string][]string{
+				"name": {"metadata", "name"},
+			},
+		},
+		Metrics: []customresourcestate.Generator{
+			{
+				Name: "project_info",
+				Help: "information about a Gardener Project",
+				Each: customresourcestate.Metric{
+					Type: metric.Info,
+					Info: &customresourcestate.MetricInfo{
+						MetricMeta: customresourcestate.MetricMeta{
+							LabelsFromPath: map[string][]string{
+								"namespace": {"spec", "namespace"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return resources
+}
+
 // Option is a functional option type used to configure the CustomResourceState settings
 type Option func(*customresourcestate.Metrics)
 
@@ -193,6 +227,11 @@ func WithGardenResourceMetrics(c *customresourcestate.Metrics) {
 // WithVPAMetrics adds the custom resource state configuration for the VerticalPodAutoscaler resource
 func WithVPAMetrics(c *customresourcestate.Metrics) {
 	c.Spec.Resources = append(c.Spec.Resources, newCustomResourceStateMetricsForVPA())
+}
+
+// WithVirtualGardenMetrics adds the custom resource state configuration for the Gardener resources
+func WithVirtualGardenMetrics(c *customresourcestate.Metrics) {
+	c.Spec.Resources = append(c.Spec.Resources, newVirtualGardenCustomResourceStateMetrics())
 }
 
 // NewCustomResourceStateConfig returns a new CustomResourceState configuration that can be serialized

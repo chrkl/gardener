@@ -1,0 +1,31 @@
+spec:
+  resources:
+  - metricNamePrefix: garden
+    groupVersionKind:
+      group: core.gardener.cloud
+      version: v1beta1
+      kind: Project
+    commonLabels: {}
+    labelsFromPath:
+      name:
+      - metadata
+      - name
+    metrics:
+    - name: project_info
+      help: information about a Gardener Project
+      each:
+        type: info
+        gauge: null
+        stateSet: null
+        info:
+          labelsFromPath:
+            namespace:
+            - spec
+            - namespace
+          path: []
+          labelFromKey: ""
+      commonLabels: {}
+      labelsFromPath: {}
+      errorLogV: 0
+    errorLogV: 0
+    resourcePlural: ""

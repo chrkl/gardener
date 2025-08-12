@@ -12,6 +12,7 @@ import (
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/kubestatemetrics"
 	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
+	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
 
 // NewKubeStateMetrics instantiates a new `kube-state-metrics` component.
@@ -21,6 +22,7 @@ func NewKubeStateMetrics(
 	runtimeVersion *semver.Version,
 	priorityClassName string,
 	nameSuffix string,
+	secretsManager secretsmanager.Interface,
 ) (
 	component.DeployWaiter,
 	error,
@@ -30,8 +32,13 @@ func NewKubeStateMetrics(
 		return nil, err
 	}
 
-	return kubestatemetrics.New(c, gardenNamespaceName, nil, kubestatemetrics.Values{
-		ClusterType:       component.ClusterTypeSeed,
+	clusterType := component.ClusterTypeSeed
+	if nameSuffix == kubestatemetrics.SuffixVirtual {
+		clusterType = component.ClusterTypeShoot
+	}
+
+	return kubestatemetrics.New(c, gardenNamespaceName, secretsManager, kubestatemetrics.Values{
+		ClusterType:       clusterType,
 		Image:             image.String(),
 		PriorityClassName: priorityClassName,
 		Replicas:          2,
