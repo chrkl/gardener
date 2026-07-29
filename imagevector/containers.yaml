@@ -196,6 +196,11 @@ images:
     sourceRepository: github.com/gardener/opentelemetry-collector
     repository: europe-docker.pkg.dev/gardener-project/releases/gardener/observability/opentelemetry-collector
     tag: "v0.0.1"
+  # TODO: Replace by released version once available
+  - name: gardener-metrics-collector
+    sourceRepository: github.com/gardener/opentelemetry-collector
+    repository: europe-docker.pkg.dev/gardener-project/snapshots/gardener/observability/opentelemetry-collector
+    tag: "v0.0.2-fafc1ad5adc225fc9579c9b5b692a6a0095ee682"
   - name: victoria-logs
     sourceRepository: github.com/VictoriaMetrics/VictoriaLogs
     repository: europe-docker.pkg.dev/gardener-project/releases/3rd/victoriametrics/victoria-logs
