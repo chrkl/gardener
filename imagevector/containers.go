@@ -109,6 +109,8 @@ const (
 	ContainerImageNameNodeLocalDns = "node-local-dns"
 	// ContainerImageNameNodeProblemDetector is a constant for an image in the image vector with name 'node-problem-detector'.
 	ContainerImageNameNodeProblemDetector = "node-problem-detector"
+	// ContainerImageNameGardenerMetricsCollector is a constant for an image in the image vector with name 'gardener-metrics-collector'.
+	ContainerImageNameGardenerMetricsCollector = "gardener-metrics-collector"
 	// ContainerImageNameOpentelemetryCollector is a constant for an image in the image vector with name 'opentelemetry-collector'.
 	ContainerImageNameOpentelemetryCollector = "opentelemetry-collector"
 	// ContainerImageNameOpentelemetryOperator is a constant for an image in the image vector with name 'opentelemetry-operator'.
