@@ -29,6 +29,11 @@ const (
 	// metricsPort is the port on which the collector's Prometheus exporter exposes the gathered garden_* metrics.
 	metricsPort = 2723
 
+	// internalMetricsPort is the port on which the collector exposes its own otelcol_* self-observability metrics.
+	// The OpenTelemetry Operator serves these on a separate "monitoring" service and, because we use the
+	// readers-based telemetry syntax, defaults this port to 8888.
+	internalMetricsPort = 8888
+
 	// ManagedResourceNameRuntime is the name of the ManagedResource for the runtime resources.
 	ManagedResourceNameRuntime = "gardener-metrics-collector-runtime"
 	// ManagedResourceNameVirtual is the name of the ManagedResource for the virtual resources.
@@ -89,6 +94,7 @@ func (g *gardenerMetricsCollector) Deploy(ctx context.Context) error {
 		g.serviceAccount(),
 		g.openTelemetryCollector(secretGenericTokenKubeconfig.Name, virtualGardenAccessSecret.Secret.Name),
 		g.serviceMonitor(),
+		g.internalMetricsServiceMonitor(),
 	)
 	if err != nil {
 		return err
