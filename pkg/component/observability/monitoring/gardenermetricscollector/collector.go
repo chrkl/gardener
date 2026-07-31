@@ -92,6 +92,28 @@ func (g *gardenerMetricsCollector) openTelemetryCollector(genericTokenKubeconfig
 					},
 				},
 				Service: otelv1beta1.Service{
+					// Telemetry configures the collector's own self-observability metrics (otelcol_*). The
+					// OpenTelemetry Operator serves them on a separate "monitoring" service; internalMetricsServiceMonitor
+					// scrapes that service.
+					Telemetry: &otelv1beta1.AnyConfig{
+						Object: map[string]any{
+							"metrics": map[string]any{
+								"level": "basic",
+								"readers": []any{
+									map[string]any{
+										"pull": map[string]any{
+											"exporter": map[string]any{
+												"prometheus": map[string]any{
+													"host": "[::]",
+													"port": internalMetricsPort,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 					Pipelines: map[string]*otelv1beta1.Pipeline{
 						"metrics": {
 							Receivers: []string{"gardener"},
@@ -111,7 +133,7 @@ func (g *gardenerMetricsCollector) openTelemetryCollector(genericTokenKubeconfig
 	// Annotations set on the OpenTelemetryCollector resource are propagated by the OpenTelemetry Operator to the
 	// resources it creates - in particular to the Service that the garden Prometheus scrapes. This is currently the
 	// only way to make the operator-created Service selectable as a garden scrape target.
-	metav1.SetMetaDataAnnotation(&obj.ObjectMeta, resourcesv1alpha1.NetworkPolicyFromPolicyAnnotationPrefix+v1beta1constants.LabelNetworkPolicyGardenScrapeTargets+resourcesv1alpha1.NetworkPolicyFromPolicyAnnotationSuffix, fmt.Sprintf(`[{"protocol":"TCP","port":%d}]`, metricsPort))
+	metav1.SetMetaDataAnnotation(&obj.ObjectMeta, resourcesv1alpha1.NetworkPolicyFromPolicyAnnotationPrefix+v1beta1constants.LabelNetworkPolicyGardenScrapeTargets+resourcesv1alpha1.NetworkPolicyFromPolicyAnnotationSuffix, fmt.Sprintf(`[{"protocol":"TCP","port":%d},{"protocol":"TCP","port":%d}]`, metricsPort, internalMetricsPort))
 
 	return obj
 }
