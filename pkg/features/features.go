@@ -135,6 +135,12 @@ const (
 	// owner: @jamand @timebertt
 	// alpha: v1.148.0
 	RemoveHTTPProxyLegacyPort featuregate.Feature = "RemoveHTTPProxyLegacyPort"
+
+	// GardenerMetricsCollector enables the deployment of the gardener-metrics-collector instance in the
+	// Garden runtime cluster.
+	// owner: @chrkl
+	// alpha: v1.149.0
+	GardenerMetricsCollector featuregate.Feature = "GardenerMetricsCollector"
 )
 
 // DefaultFeatureGate is the central feature gate map used by all gardener components.
@@ -180,6 +186,7 @@ var AllFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	LiveControlPlaneMigration:      {Default: false, PreRelease: featuregate.Alpha},
 	BackupEntryForGarden:           {Default: true, PreRelease: featuregate.Beta},
 	RemoveHTTPProxyLegacyPort:      {Default: false, PreRelease: featuregate.Alpha},
+	GardenerMetricsCollector:       {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // GetFeatures returns a feature gate map with the respective specifications. Non-existing feature gates are ignored.
