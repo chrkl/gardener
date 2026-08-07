@@ -138,6 +138,12 @@ const (
 	// owner: @pujitha24
 	// alpha: v1.152.0
 	StrictAuditPolicyValidation featuregate.Feature = "StrictAuditPolicyValidation"
+
+	// GardenerMetricsCollector enables the deployment of the gardener-metrics-collector instance in the
+	// Garden runtime cluster.
+	// owner: @chrkl
+	// alpha: v1.154.0
+	GardenerMetricsCollector featuregate.Feature = "GardenerMetricsCollector"
 )
 
 // DefaultFeatureGate is the central feature gate map used by all gardener components.
@@ -183,6 +189,7 @@ var AllFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	LiveControlPlaneMigration:      {Default: false, PreRelease: featuregate.Alpha},
 	RemoveHTTPProxyLegacyPort:      {Default: true, PreRelease: featuregate.Beta},
 	StrictAuditPolicyValidation:    {Default: false, PreRelease: featuregate.Alpha},
+	GardenerMetricsCollector:       {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // GetFeatures returns a feature gate map with the respective specifications. Non-existing feature gates are ignored.
