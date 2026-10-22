@@ -93,7 +93,7 @@ func (g *gardenerMetricsCollector) Deploy(ctx context.Context) error {
 	runtimeResources, err := runtimeRegistry.AddAllAndSerialize(
 		g.serviceAccount(),
 		g.openTelemetryCollector(secretGenericTokenKubeconfig.Name, virtualGardenAccessSecret.Secret.Name),
-		g.serviceMonitor(),
+		g.scrapeConfig(),
 		g.internalMetricsServiceMonitor(),
 		g.verticalPodAutoscaler(),
 	)
